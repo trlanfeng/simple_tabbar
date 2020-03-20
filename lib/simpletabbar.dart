@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 import 'dart:ui' show lerpDouble;
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -266,102 +267,7 @@ class _IndicatorPainter extends CustomPainter {
   }
 }
 
-// This class, and TabBarScrollController, only exist to handle the case
-// where a scrollable TabBar has a non-zero initialIndex. In that case we can
-// only compute the scroll position's initial scroll offset (the "correct"
-// pixels value) after the TabBar viewport width and scroll limits are known.
-class _TabBarScrollPosition extends ScrollPositionWithSingleContext {
-  _TabBarScrollPosition({
-    ScrollPhysics physics,
-    ScrollContext context,
-    ScrollPosition oldPosition,
-    this.tabBar,
-  }) : super(
-          physics: physics,
-          context: context,
-          initialPixels: null,
-          oldPosition: oldPosition,
-        );
-
-  final _EasyTabBarState tabBar;
-
-  bool _initialViewportDimensionWasZero;
-
-  @override
-  bool applyContentDimensions(double minScrollExtent, double maxScrollExtent) {
-    bool result = true;
-    if (_initialViewportDimensionWasZero != true) {
-      // If the viewport never had a non-zero dimension, we just want to jump
-      // to the initial scroll position to avoid strange scrolling effects in
-      // release mode: In release mode, the viewport temporarily may have a
-      // dimension of zero before the actual dimension is calculated. In that
-      // scenario, setting the actual dimension would cause a strange scroll
-      // effect without this guard because the super call below would starts a
-      // ballistic scroll activity.
-      assert(viewportDimension != null);
-      _initialViewportDimensionWasZero = viewportDimension != 0.0;
-      correctPixels(tabBar._initialScrollOffset(
-          viewportDimension, minScrollExtent, maxScrollExtent));
-      result = false;
-    }
-    return super.applyContentDimensions(minScrollExtent, maxScrollExtent) &&
-        result;
-  }
-}
-
-// This class, and TabBarScrollPosition, only exist to handle the case
-// where a scrollable TabBar has a non-zero initialIndex.
-class _TabBarScrollController extends ScrollController {
-  _TabBarScrollController(this.tabBar);
-
-  final _EasyTabBarState tabBar;
-
-  @override
-  ScrollPosition createScrollPosition(ScrollPhysics physics,
-      ScrollContext context, ScrollPosition oldPosition) {
-    return _TabBarScrollPosition(
-      physics: physics,
-      context: context,
-      oldPosition: oldPosition,
-      tabBar: tabBar,
-    );
-  }
-}
-
-/// A material design widget that displays a horizontal row of tabs.
-///
-/// Typically created as the [AppBar.bottom] part of an [AppBar] and in
-/// conjunction with a [TabBarView].
-///
-/// If a [TabController] is not provided, then a [DefaultTabController] ancestor
-/// must be provided instead. The tab controller's [TabController.length] must
-/// equal the length of the [tabs] list and the length of the
-/// [TabBarView.children] list.
-///
-/// Requires one of its ancestors to be a [Material] widget.
-///
-/// Uses values from [TabBarTheme] if it is set in the current context.
-///
-/// To see a sample implementation, visit the [TabController] documentation.
-///
-/// See also:
-///
-///  * [TabBarView], which displays page views that correspond to each tab.
 class EasyTabBar extends StatefulWidget implements PreferredSizeWidget {
-  /// Creates a material design tab bar.
-  ///
-  /// The [tabs] argument must not be null and its length must match the [controller]'s
-  /// [TabController.length].
-  ///
-  /// If a [TabController] is not provided, then there must be a
-  /// [DefaultTabController] ancestor.
-  ///
-  /// The [indicatorWeight] parameter defaults to 2, and must not be null.
-  ///
-  /// The [indicatorPadding] parameter defaults to [EdgeInsets.zero], and must not be null.
-  ///
-  /// If [indicator] is not null, then [indicatorWeight], [indicatorPadding], and
-  /// [indicatorColor] are ignored.
   const EasyTabBar({
     Key key,
     @required this.tabs,
@@ -543,8 +449,6 @@ class _EasyTabBarState extends State<EasyTabBar> {
   @override
   void initState() {
     super.initState();
-    // If indicatorSize is TabIndicatorSize.label, _tabKeys[i] is used to find
-    // the width of tab widget i. See _IndicatorPainter.indicatorRect().
     _tabKeys = widget.tabs.map((Widget tab) => GlobalKey()).toList();
   }
 
@@ -554,20 +458,6 @@ class _EasyTabBarState extends State<EasyTabBar> {
     if (tabBarTheme.indicator != null) return tabBarTheme.indicator;
 
     Color color = widget.indicatorColor ?? Theme.of(context).indicatorColor;
-    // ThemeData tries to avoid this by having indicatorColor avoid being the
-    // primaryColor. However, it's possible that the tab bar is on a
-    // Material that isn't the primaryColor. In that case, if the indicator
-    // color ends up matching the material's color, then this overrides it.
-    // When that happens, automatic transitions of the theme will likely look
-    // ugly as the indicator color suddenly snaps to white at one end, but it's
-    // not clear how to avoid that any further.
-    //
-    // The material's color might be null (if it's a transparency). In that case
-    // there's no good way for us to find out what the color is so we don't.
-    // todo
-    // 如果指示器的颜色和material主颜色一致，则改成白色，我们不考虑
-    // if (color.value == Material.of(context).color?.value)
-    //   color = Colors.white;
 
     return UnderlineTabIndicator(
       insets: widget.indicatorPadding,
@@ -600,13 +490,13 @@ class _EasyTabBarState extends State<EasyTabBar> {
     if (newController == _controller) return;
 
     if (_controllerIsValid) {
-      _controller.animation.removeListener(_handleTabControllerAnimationTick);
-      _controller.removeListener(_handleTabControllerTick);
+      // _controller.animation.removeListener(_handleTabControllerAnimationTick);
+      // _controller.removeListener(_handleTabControllerTick);
     }
     _controller = newController;
     if (_controller != null) {
-      _controller.animation.addListener(_handleTabControllerAnimationTick);
-      _controller.addListener(_handleTabControllerTick);
+      // _controller.animation.addListener(_handleTabControllerAnimationTick);
+      // _controller.addListener(_handleTabControllerTick);
       _currentIndex = _controller.index;
     }
   }
@@ -636,15 +526,6 @@ class _EasyTabBarState extends State<EasyTabBar> {
   @override
   void didUpdateWidget(EasyTabBar oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.controller != oldWidget.controller) {
-      _updateTabController();
-      _initIndicatorPainter();
-    } else if (widget.indicatorColor != oldWidget.indicatorColor ||
-        widget.indicatorWeight != oldWidget.indicatorWeight ||
-        widget.indicatorSize != oldWidget.indicatorSize ||
-        widget.indicator != oldWidget.indicator) {
-      _initIndicatorPainter();
-    }
 
     if (widget.tabs.length > oldWidget.tabs.length) {
       final int delta = widget.tabs.length - oldWidget.tabs.length;
@@ -686,11 +567,6 @@ class _EasyTabBarState extends State<EasyTabBar> {
     final ScrollPosition position = _scrollController.position;
     return _tabScrollOffset(index, position.viewportDimension,
         position.minScrollExtent, position.maxScrollExtent);
-  }
-
-  double _initialScrollOffset(
-      double viewportWidth, double minExtent, double maxExtent) {
-    return _tabScrollOffset(_currentIndex, viewportWidth, minExtent, maxExtent);
   }
 
   void _scrollToCurrentIndex() {
@@ -751,9 +627,9 @@ class _EasyTabBarState extends State<EasyTabBar> {
   // Called each time layout completes.
   void _saveTabOffsets(
       List<double> tabOffsets, TextDirection textDirection, double width) {
-        print('width:$_tabStripWidth');
-        print('tabOffsets:$tabOffsets');
-        print('textDirection:$textDirection');
+    print('width:$_tabStripWidth');
+    print('tabOffsets:$tabOffsets');
+    print('textDirection:$textDirection');
     _tabStripWidth = width;
     _indicatorPainter?.saveTabOffsets(tabOffsets, textDirection);
   }
@@ -812,6 +688,7 @@ class _EasyTabBarState extends State<EasyTabBar> {
     for (int index = 0; index < tabCount; index += 1) {
       wrappedTabs[index] = RaisedButton(
         onPressed: () {
+          print('index:${index}');
           _handleTap(index);
         },
         child: Padding(
@@ -819,10 +696,6 @@ class _EasyTabBarState extends State<EasyTabBar> {
           child: Stack(
             children: <Widget>[
               wrappedTabs[index],
-              Semantics(
-                selected: index == _currentIndex,
-                label: '${index + 1} / $tabCount',
-              ),
             ],
           ),
         ),
@@ -832,23 +705,36 @@ class _EasyTabBarState extends State<EasyTabBar> {
     }
 
     Widget tabBar = CustomPaint(
-      painter: _indicatorPainter,
+      painter: _TrianglePainter(lineSize: 10),
       child: _TabLabelBar(
         onPerformLayout: _saveTabOffsets,
         children: wrappedTabs,
       ),
     );
 
-    if (widget.isScrollable) {
-      _scrollController ??= _TabBarScrollController(this);
-      tabBar = SingleChildScrollView(
-        dragStartBehavior: widget.dragStartBehavior,
-        scrollDirection: Axis.horizontal,
-        controller: _scrollController,
-        child: tabBar,
-      );
-    }
-
     return tabBar;
+  }
+}
+
+class _TrianglePainter extends CustomPainter {
+  final double lineSize;
+
+  _TrianglePainter({this.lineSize = 16});
+  @override
+  void paint(Canvas canvas, Size size) {
+    Path path = Path();
+    path.moveTo(0, 0);
+    path.lineTo(lineSize, 0);
+    path.lineTo(lineSize / 2, tan(pi / 3) * lineSize / 2);
+    path.close();
+    Paint paint = Paint();
+    paint.color = Color.fromARGB(255, 118, 165, 248);
+    paint.style = PaintingStyle.fill;
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(CustomPainter oldDelegate) {
+    return false;
   }
 }
